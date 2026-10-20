@@ -5,7 +5,7 @@
   "lang": "ko",
   "dir": "ltr",
   "id": "./",
-  "start_url": "./index.html",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
@@ -23,13 +23,13 @@
       "name": "기록 추가",
       "short_name": "추가",
       "description": "새 수입·지출 기록하기",
-      "url": "./index.html?action=add"
+      "url": "./?action=add"
     },
     {
       "name": "통계 보기",
       "short_name": "통계",
       "description": "이번 달 소비 통계",
-      "url": "./index.html?tab=stats"
+      "url": "./?tab=stats"
     }
   ]
 }
