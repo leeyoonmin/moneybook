@@ -1,5 +1,5 @@
 /* 머니북 service worker — offline-first shell, network-first for app code */
-const CACHE = 'moneybook-v1.1.0';
+const CACHE = 'moneybook-v1.2.0';
 const CORE = [
   './',
   './index.html',

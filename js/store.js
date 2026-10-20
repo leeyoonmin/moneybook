@@ -50,6 +50,37 @@ export function addMonths(ym, delta) {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
 }
 
+export const addDays = (ymd, delta) => {
+  const [y, m, d] = ymd.split('-').map(Number);
+  return todayStr(new Date(y, m - 1, d + Number(delta)));
+};
+
+export function startOfWeek(ymd = todayStr()) {
+  const [y, m, d] = ymd.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  const offset = (dt.getDay() + 6) % 7; // Monday = 0
+  dt.setDate(dt.getDate() - offset);
+  return todayStr(dt);
+}
+
+export const weekDates = (start) => Array.from({ length: 7 }, (_, i) => addDays(start, i));
+
+export const weekRangeLabel = (start) => {
+  const end = addDays(start, 6);
+  const [sy, sm, sd] = start.split('-').map(Number);
+  const [ey, em, ed] = end.split('-').map(Number);
+  const currentYear = todayStr().slice(0, 4);
+  const left = sy === ey && sy === Number(currentYear) ? `${sm}.${sd}` : `${sy}.${sm}.${sd}`;
+  const right = sy === ey ? `${em}.${ed}` : `${ey}.${em}.${ed}`;
+  return `${left} – ${right}`;
+};
+
+export function daysBetween(a, b) {
+  const [ay, am, ad] = a.split('-').map(Number);
+  const [by, bm, bd] = b.split('-').map(Number);
+  return Math.round((Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad)) / 86400000);
+}
+
 export const fmt = (n) => new Intl.NumberFormat('ko-KR').format(Math.round(Number(n) || 0));
 export const won = (n) => `₩${fmt(Math.abs(Number(n) || 0))}`;
 
@@ -217,6 +248,10 @@ export const DB = {
 
   monthTx(ym) {
     return state.tx.filter((t) => t.date.startsWith(ym)).sort(sortTx);
+  },
+
+  rangeTx(start, end) {
+    return state.tx.filter((t) => t.date >= start && t.date <= end).sort(sortTx);
   },
 
   allTx() { return [...state.tx].sort(sortTx); },
@@ -501,6 +536,20 @@ export const DB = {
           memo,
           method
         });
+      }
+
+      // Give the weekly home a meaningful sample in the current week.
+      if (mi === 0) {
+        rows.push({
+          type: 'expense', catId: 'cafe', amount: 5200,
+          date: `${ym}-${pad2(today)}`, memo: '오늘의 커피', method: '카드'
+        });
+        if (today > 1) {
+          rows.push({
+            type: 'expense', catId: 'food', amount: 11000,
+            date: `${ym}-${pad2(today - 1)}`, memo: '점심', method: '카드'
+          });
+        }
       }
     }
 

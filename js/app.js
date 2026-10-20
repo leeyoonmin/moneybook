@@ -4,7 +4,8 @@
 
 import {
   DB, METHODS, CAT_COLORS, fmt, won, todayStr, ymOf, currentYm, monthLabel,
-  dateLabel, weekdayLabel, addMonths
+  dateLabel, weekdayLabel, addMonths, addDays, startOfWeek, weekDates,
+  weekRangeLabel, daysBetween
 } from './store.js';
 import { Cloud } from './cloud.js';
 
@@ -45,6 +46,8 @@ const I = {
 const S = {
   tab: 'home',
   ym: currentYm(),
+  weekStart: startOfWeek(),
+  homeMode: 'week',
   filter: 'all',
   statType: 'expense',
   draft: null,
@@ -148,21 +151,92 @@ function emptyBlock({ title, desc, seed = false }) {
 
 /* ---------- home ---------- */
 
-function homeView() {
-  const list = DB.monthTx(S.ym);
+function homeModeSeg() {
+  return `
+    <div class="seg full home-seg" role="tablist" aria-label="홈 보기 기간">
+      <button class="${S.homeMode === 'week' ? 'on' : ''}" data-act="home-mode" data-mode="week" role="tab" aria-selected="${S.homeMode === 'week'}">주간</button>
+      <button class="${S.homeMode === 'month' ? 'on' : ''}" data-act="home-mode" data-mode="month" role="tab" aria-selected="${S.homeMode === 'month'}">월간</button>
+    </div>`;
+}
+
+function weekNav() {
+  const isNow = S.weekStart === startOfWeek();
+  return `
+    <div class="monthnav weeknav">
+      <button class="icon-btn" data-act="prev-week" aria-label="이전 주">${I.chevL}</button>
+      <button class="monthbtn weekbtn" data-act="this-week" aria-label="이번 주로 돌아가기">
+        ${weekRangeLabel(S.weekStart)}${isNow ? '<span class="now-dot">이번 주</span>' : ''}
+      </button>
+      <button class="icon-btn" data-act="next-week" aria-label="다음 주">${I.chevR}</button>
+    </div>`;
+}
+
+function weekHero(list, prevList, prevSameList, avg, elapsed) {
   const sum = DB.summary(list);
-  const budget = DB.budgetFor(S.ym);
+  const prevFull = DB.summary(prevList).expense;
+  const prev = DB.summary(prevSameList).expense;
+  const partial = elapsed < 7;
+  const compareLabel = partial ? '지난주 같은 기간' : '지난주';
+  const diff = sum.expense - prev;
+  const pct = prev > 0 ? Math.round((Math.abs(diff) / prev) * 100) : null;
+  const isNow = S.weekStart === startOfWeek();
+  const today = todayStr();
+  const days = weekDates(S.weekStart);
+  const totals = days.map((d) => list
+    .filter((t) => t.date === d)
+    .reduce((a, t) => a + t.amount, 0));
+  const max = Math.max(...totals, 1);
+
+  let pill = '';
+  if (sum.expense > 0) {
+    if (!prev) pill = `<span class="hero-pill">${partial ? '비교 기록 없음' : '지난주 0원'}</span>`;
+    else if (diff === 0) pill = '<span class="hero-pill">지난주와 같음</span>';
+    else if (pct === 0) pill = '<span class="hero-pill">지난주와 비슷</span>';
+    else pill = `<span class="hero-pill ${diff > 0 ? 'over' : 'good'}">${diff > 0 ? '+' : '−'}${pct}%</span>`;
+  }
+
+  let compare;
+  if (!sum.expense) compare = '이번 주는 아직 지출이 없어요.';
+  else if (!prev) compare = `${compareLabel}에는 지출이 없었어요.`;
+  else if (diff === 0) compare = `${compareLabel}${partial ? '과' : '와'} 같은 금액을 썼어요.`;
+  else if (pct === 0) compare = `${compareLabel}${partial ? '과' : '와'} 거의 같아요.`;
+  else if (diff > 0) compare = `<span class="cmp-ar">↑</span>${compareLabel}보다 <b>${won(diff)}</b> 더 썼어요`;
+  else compare = `<span class="cmp-ar">↓</span>${compareLabel}보다 <b>${won(-diff)}</b> 덜 썼어요`;
+
+  const tone = !sum.expense || diff === 0 || pct === 0 ? 'same' : diff > 0 ? 'more' : 'less';
+
+  return `
+    <section class="hero week">
+      <div class="hero-top">
+        <span>${isNow ? '이번 주 지출' : '주간 지출'}</span>
+        ${pill}
+      </div>
+      <div class="hero-amount"><span class="cur">₩</span>${fmt(sum.expense)}</div>
+      <div class="week-compare ${tone}">${compare}</div>
+      ${totals.some((v) => v > 0) ? `
+      <div class="weekbars" aria-label="요일별 지출">
+        ${days.map((d, i) => {
+          const h = totals[i] ? Math.max(8, Math.round((totals[i] / max) * 100)) : 0;
+          const cls = [d === today && isNow ? 'today' : '', isNow && d > today ? 'future' : '', totals[i] ? '' : 'zero']
+            .filter(Boolean).join(' ');
+          return `<div class="wbar ${cls}" title="${dateLabel(d)} ${won(totals[i])}">
+            <div class="wbar-track"><i style="height:${h}%"></i></div>
+            <span class="wd">${weekdayLabel(d)}</span>
+          </div>`;
+        }).join('')}
+      </div>` : ''}
+      <div class="hero-foot">
+        <div><span class="k">${partial ? '지난주 총액' : '지난주'}</span><span class="v">${won(prevFull)}</span></div>
+        <div><span class="k">하루 평균</span><span class="v">${won(avg)}</span></div>
+      </div>
+    </section>`;
+}
+
+function monthHero(sum, avg, budget, isNow) {
   const over = budget > 0 && sum.expense > budget;
   const pct = budget > 0 ? Math.round((sum.expense / budget) * 100) : 0;
-  const isNow = S.ym === currentMonth();
-  const days = isNow ? Math.max(1, new Date().getDate()) : daysIn(S.ym);
-  const avg = Math.round(sum.expense / days);
-  const recent = list.slice(0, 5);
-  const top = DB.byCategory(list, 'expense').items.slice(0, 3);
-  const maxTop = top.length ? top[0].value : 0;
-  const net = sum.income - sum.expense;
 
-  const hero = `
+  return `
     <section class="hero ${over ? 'over' : ''}">
       <div class="hero-top">
         <span>${isNow ? '이번 달 지출' : `${monthLabel(S.ym)} 지출`}</span>
@@ -179,8 +253,58 @@ function homeView() {
         <button class="hero-cta" data-act="edit-budget">월 예산 설정하기 ${I.chev}</button>
       `}
     </section>`;
+}
 
-  const strip = `
+function monthBudgetMini() {
+  const budget = DB.budgetFor(S.ym);
+  if (budget <= 0) return '';
+  const spent = DB.summary(DB.monthTx(S.ym)).expense;
+  const over = spent > budget;
+  const pct = Math.round((spent / budget) * 100);
+  const label = S.ym === currentMonth() ? '이번 달 예산' : `${Number(S.ym.slice(5, 7))}월 예산`;
+
+  return `
+    <button class="budget-mini ${over ? 'over' : ''}" data-act="edit-budget">
+      <span class="bm-head"><span>${label}</span><span class="bm-pct">${over ? '초과 ' : ''}${pct}%</span></span>
+      <span class="bm-amount">${won(spent)}<em> / ${won(budget)}</em></span>
+      <span class="bm-bar"><i style="width:${Math.min(100, pct)}%"></i></span>
+    </button>`;
+}
+
+function homeView() {
+  const isWeek = S.homeMode === 'week';
+  const isNowWeek = S.weekStart === startOfWeek();
+  const isNowMonth = S.ym === currentMonth();
+  const list = isWeek
+    ? DB.rangeTx(S.weekStart, addDays(S.weekStart, 6))
+    : DB.monthTx(S.ym);
+  const sum = DB.summary(list);
+  const prevStart = addDays(S.weekStart, -7);
+  const prevList = isWeek ? DB.rangeTx(prevStart, addDays(prevStart, 6)) : [];
+  const elapsed = isNowWeek
+    ? Math.min(7, Math.max(1, daysBetween(S.weekStart, todayStr()) + 1))
+    : 7;
+  const prevSameList = isWeek ? DB.rangeTx(prevStart, addDays(prevStart, elapsed - 1)) : [];
+  const avg = isWeek
+    ? Math.round(sum.expense / elapsed)
+    : Math.round(sum.expense / (isNowMonth ? Math.max(1, new Date().getDate()) : daysIn(S.ym)));
+  const monthExpense = isWeek ? DB.summary(DB.monthTx(S.ym)).expense : sum.expense;
+  const recent = list.slice(0, 5);
+  const top = DB.byCategory(list, 'expense').items.slice(0, 3);
+  const maxTop = top.length ? top[0].value : 0;
+  const net = sum.income - sum.expense;
+  const budget = DB.budgetFor(S.ym);
+
+  const nav = isWeek ? weekNav() : monthNav();
+  const hero = isWeek ? weekHero(list, prevList, prevSameList, avg, elapsed) : monthHero(sum, avg, budget, isNowMonth);
+
+  const strip = isWeek ? `
+    <div class="strip">
+      <div><span class="k">${isNowMonth ? '이번 달 지출' : `${Number(S.ym.slice(5, 7))}월 지출`}</span><span class="v">${won(monthExpense)}</span></div>
+      <div><span class="k">수입</span><span class="v income">${won(sum.income)}</span></div>
+      <div><span class="k">기록</span><span class="v">${sum.count}건</span></div>
+    </div>
+    ${monthBudgetMini()}` : `
     <div class="strip">
       <div><span class="k">수입</span><span class="v income">${won(sum.income)}</span></div>
       <div><span class="k">하루 평균</span><span class="v">${won(avg)}</span></div>
@@ -190,14 +314,18 @@ function homeView() {
   const recentSection = `
     <section class="section">
       <div class="section-head">
-        <h2>최근 기록</h2>
+        <h2>${isWeek ? (isNowWeek ? '이번 주 기록' : '주간 기록') : '최근 기록'}</h2>
         <button class="aside" data-act="tab" data-tab="ledger">전체 보기 ${I.chev}</button>
       </div>
       ${recent.length
         ? `<div class="list">${recent.map((t) => txRow(t, { showDate: true })).join('')}</div>`
         : emptyBlock({
-            title: isNow ? '아직 기록이 없어요' : '이 달 기록이 없어요',
-            desc: '오늘 쓴 돈부터 가볍게 적어보세요.',
+            title: isWeek
+              ? (isNowWeek ? '이번 주 기록이 없어요' : '선택한 주에 기록이 없어요')
+              : (isNowMonth ? '아직 기록이 없어요' : '이 달 기록이 없어요'),
+            desc: isWeek
+              ? (isNowWeek ? '이번 주에 쓴 돈부터 가볍게 적어보세요.' : '선택한 주에 있었던 지출을 적어보세요.')
+              : '오늘 쓴 돈부터 가볍게 적어보세요.',
             seed: DB.state.tx.length === 0 && !DB.state.cloud
           })}
     </section>`;
@@ -220,21 +348,33 @@ function homeView() {
       </div>
     </section>` : '';
 
-  return `
-    ${topbar()}
-    <div class="page">
-      ${monthNav()}
-      ${hero}
-      ${strip}
-      ${recentSection}
-      ${topSection}
-      <p class="settings-foot">${sum.count === 0
+  const storeFoot = S.mode === 'cloud'
+    ? '가족과 실시간으로 공유됩니다.'
+    : '기록은 이 기기에 저장됩니다.';
+  const foot = isWeek
+    ? `${sum.count === 0
+        ? (isNowWeek ? '이번 주 기록을 시작해 보세요.' : '선택한 주에 기록이 없어요.')
+        : sum.income > 0
+          ? `${isNowWeek ? '이번 주' : '선택한 주'} 수입은 ${won(sum.income)}이에요.`
+          : `${isNowWeek ? '이번 주' : '선택한 주'}는 ${sum.count}건을 기록했어요.`}<br>${storeFoot}`
+    : `${sum.count === 0
         ? '이번 달 기록을 시작해 보세요.'
         : net > 0
           ? `이번 달은 수입이 ${won(net)} 더 많아요.`
           : net < 0
             ? `이번 달은 지출이 ${won(-net)} 더 많아요.`
-            : '이번 달 수입과 지출이 같아요.'}<br>기록은 이 기기에만 저장됩니다.</p>
+            : '이번 달 수입과 지출이 같아요.'}<br>${storeFoot}`;
+
+  return `
+    ${topbar()}
+    <div class="page">
+      ${homeModeSeg()}
+      ${nav}
+      ${hero}
+      ${strip}
+      ${recentSection}
+      ${topSection}
+      <p class="settings-foot">${foot}</p>
     </div>`;
 }
 
@@ -565,7 +705,7 @@ function settingsView() {
           <span class="val">${isStandalone() ? '설치됨' : 'PWA'}</span>
         </button>
         <div class="row" style="color:var(--muted)">
-          <span class="ic">${I.cloud}</span><span>버전</span><span class="val">1.1.0</span>
+          <span class="ic">${I.cloud}</span><span>버전</span><span class="val">1.2.0</span>
         </div>
       </div>
 
@@ -859,6 +999,17 @@ function txSheetHTML(d) {
     </div>`;
 }
 
+function defaultTxDate() {
+  const today = todayStr();
+  if (S.homeMode === 'week') {
+    const end = addDays(S.weekStart, 6);
+    return today >= S.weekStart && today <= end ? today : S.weekStart;
+  }
+  if (S.ym === currentMonth()) return today;
+  const day = String(Math.min(Number(today.slice(8, 10)), daysIn(S.ym))).padStart(2, '0');
+  return `${S.ym}-${day}`;
+}
+
 function openTxSheet(id) {
   const tx = id ? DB.txById(id) : null;
   const type = tx?.type || 'expense';
@@ -872,7 +1023,7 @@ function openTxSheet(id) {
     type,
     digits: tx ? String(tx.amount) : '',
     catId: tx?.catId || cats[0].id,
-    date: tx?.date || (S.ym === currentMonth() ? todayStr() : `${S.ym}-${String(Math.min(new Date().getDate(), daysIn(S.ym))).padStart(2, '0')}`),
+    date: tx?.date || defaultTxDate(),
     method: tx?.method || '카드',
     memo: tx?.memo || ''
   };
@@ -1721,6 +1872,37 @@ document.addEventListener('click', (e) => {
 
   switch (act) {
     case 'tab': go(el.dataset.tab); break;
+    case 'home-mode': {
+      const mode = el.dataset.mode;
+      if (mode !== S.homeMode) {
+        if (mode === 'month') {
+          S.ym = ymOf(addDays(S.weekStart, 3));
+        } else {
+          const mid = ymOf(addDays(S.weekStart, 3));
+          if (mid !== S.ym) {
+            S.weekStart = S.ym === currentYm() ? startOfWeek() : startOfWeek(`${S.ym}-01`);
+          }
+        }
+        S.homeMode = mode;
+        render();
+      }
+      break;
+    }
+    case 'prev-week':
+      S.weekStart = addDays(S.weekStart, -7);
+      S.ym = ymOf(addDays(S.weekStart, 3));
+      render();
+      break;
+    case 'next-week':
+      S.weekStart = addDays(S.weekStart, 7);
+      S.ym = ymOf(addDays(S.weekStart, 3));
+      render();
+      break;
+    case 'this-week':
+      S.weekStart = startOfWeek();
+      S.ym = currentYm();
+      render();
+      break;
     case 'prev-month': S.ym = addMonths(S.ym, -1); render(); break;
     case 'next-month': S.ym = addMonths(S.ym, 1); render(); break;
     case 'pick-month': openMonthPicker(); break;
