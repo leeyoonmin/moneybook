@@ -69,6 +69,17 @@ ES 모듈을 사용하므로 `file://`로 열면 동작하지 않습니다. 반�
 > `https://odhzzlawithvcerazxta.supabase.co/auth/v1/callback` 하나만 사용합니다.
 > 앱 주소가 바뀌면 Supabase의 Redirect URLs만 추가하면 됩니다.
 
+### 업데이트 배포
+
+```bash
+git add -A
+git commit -m "변경 내용"
+git push
+```
+
+GitHub Pages가 `main` 브랜치를 자동으로 다시 빌드합니다(보통 1~2분).
+서비스 워커는 앱 코드를 network-first로 받아오므로, 배포 후 새로고침하면 최신 버전이 적용됩니다.
+
 ## 휴대폰에서 설치 (PWA)
 
 서비스 워커와 설치는 HTTPS(또는 localhost)에서만 동작합니다.
