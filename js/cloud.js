@@ -652,6 +652,35 @@ export const Cloud = {
     }, REALTIME_DEBOUNCE);
   },
 
+  /* ---------- push subscriptions ---------- */
+
+  async savePushSubscription({ endpoint, p256dh, auth, timezone }) {
+    if (!this.client || !this.user) throw new Error('로그인이 필요해요');
+    if (!endpoint || !p256dh || !auth) throw new Error('알림 구독 정보가 올바르지 않아요');
+    const { error } = await this.client
+      .from('push_subscriptions')
+      .upsert({
+        user_id: this.user.id,
+        endpoint,
+        p256dh,
+        auth_key: auth,
+        timezone: timezone || 'Asia/Seoul',
+        enabled: true,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'endpoint' });
+    if (error) throw error;
+  },
+
+  async removePushSubscription(endpoint) {
+    if (!this.client || !this.user || !endpoint) return;
+    const { error } = await this.client
+      .from('push_subscriptions')
+      .delete()
+      .eq('user_id', this.user.id)
+      .eq('endpoint', endpoint);
+    if (error) throw error;
+  },
+
   /* ---------- status text ---------- */
 
   statusLabel() {

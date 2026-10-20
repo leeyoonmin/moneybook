@@ -15,6 +15,7 @@ Supabase에 Google 로그인하면 같은 가계부를 여러 기기에서 실�
 - **가족 공유** — Google 로그인, 가계부(household) 생성, 초대 링크/코드 참여, 멤버 목록·권한
 - **오프라인** — 기록은 즉시 로컬에 저장하고, 연결되면 자동으로 동기화(대기열)
 - **설정** — 월별 예산, 카테고리 추가·삭제 및 순서 변경(드래그/↑↓), 테마, JSON 백업/복원
+- **기록 알림** — 매일 저녁 6시·10시, 이미 기록한 날은 건너뛰는 따뜻한 웹 푸시
 - **PWA** — 홈 화면 설치, 앱 바로가기, 오프라인 앱 셸, 자동 업데이트
 
 ## 로그인과 데이터
@@ -48,6 +49,15 @@ ES 모듈을 사용하므로 `file://`로 열면 동작하지 않습니다. 반�
 
 > 현재 프로젝트는 `https://odhzzlawithvcerazxta.supabase.co`에 연결되어 있고,
 > Google provider가 켜져 있어야 로그인 버튼이 활성화됩니다. (앱이 부팅 시 자동 확인)
+
+## 알림
+
+매일 18:00 / 22:00 KST에 기록을 권하는 웹 푸시입니다.
+그날 이미 기록했다면 보내지 않습니다. 설치는 [`PUSH_SETUP.md`](./PUSH_SETUP.md)를 참고하세요.
+
+- 구독 테이블: `supabase/push.sql` (RLS로 본인 구독만 접근)
+- 발송: GitHub Actions + `scripts/send-reminders.mjs` (service role은 GitHub secret에만)
+- 앱: **설정 → 알림 → 기록 알림**에서 기기별로 켜기
 
 ## 배포
 
@@ -101,10 +111,13 @@ moneybook/
 ├── css/style.css           # 디자인 토큰 + 모바일 UI + 로그인/공유 화면
 ├── js/store.js             # 로컬 데이터 레이어(게스트/클라우드 캐시 공용)
 ├── js/cloud.js             # Supabase 인증·가계부·동기화 큐·Realtime
-├── js/config.js            # Supabase URL / publishable key
 ├── js/vendor/supabase.js   # Supabase JS SDK (오프라인 캐시용 번들)
 ├── js/app.js               # 화면 렌더링·차트·바텀시트·이벤트
+├── js/config.js            # Supabase URL / publishable key / VAPID public key
 ├── supabase/schema.sql     # 테이블·RLS·RPC·Realtime
+├── supabase/push.sql       # 웹 푸시 구독 테이블 (증분 적용)
+├── scripts/send-reminders.mjs  # 6시/10시 웹 푸시 발송
+├── .github/workflows/reminders.yml # GitHub Actions 예약 실행
 └── icons/                  # 192/512/maskable/apple-touch/favicon
 ```
 
@@ -123,6 +136,8 @@ moneybook/
 - 주는 **월요일 시작**입니다. 이번 주 비교는 현재 요일까지의 **지난주 같은 기간**과 비교하고,
   히어로 하단에는 지난주 총액을 함께 보여줍니다.
 - 홈은 **주간**이 기본이고, 상단 토글로 **월간** 보기로 전환할 수 있습니다.
+- 알림은 **기기별**로 설정됩니다. 이미 기록한 날은 6시·10시 알림을 모두 건너뜁니다.
+- iPhone/iPad 웹 푸시는 iOS 16.4 이상에서 **홈 화면에 추가한 PWA**에서만 동작합니다.
 - 예산은 **월별로 독립**입니다. 다음 달은 새로 설정합니다.
 - 카테고리를 삭제하면 해당 기록은 서버 RPC에서 '기타'로 이동합니다.
 - 카테고리 순서는 설정에서 바꾸면 기록 입력 화면의 칩 순서에도 반영됩니다.

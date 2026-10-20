@@ -498,7 +498,42 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- 10. Grants (RLS still applies)
+-- 10. Push reminder subscriptions
+-- ---------------------------------------------------------------------------
+create table if not exists public.push_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  endpoint text not null unique,
+  p256dh text not null,
+  auth_key text not null,
+  timezone text not null default 'Asia/Seoul',
+  enabled boolean not null default true,
+  last_sent_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.push_subscriptions enable row level security;
+
+drop policy if exists "push_select_own" on public.push_subscriptions;
+create policy "push_select_own" on public.push_subscriptions
+  for select using (auth.uid() = user_id);
+drop policy if exists "push_insert_own" on public.push_subscriptions;
+create policy "push_insert_own" on public.push_subscriptions
+  for insert with check (auth.uid() = user_id);
+drop policy if exists "push_update_own" on public.push_subscriptions;
+create policy "push_update_own" on public.push_subscriptions
+  for update using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+drop policy if exists "push_delete_own" on public.push_subscriptions;
+create policy "push_delete_own" on public.push_subscriptions
+  for delete using (auth.uid() = user_id);
+
+create index if not exists push_subscriptions_user_idx
+  on public.push_subscriptions (user_id);
+
+-- ---------------------------------------------------------------------------
+-- 11. Grants (RLS still applies)
 -- ---------------------------------------------------------------------------
 grant usage on schema public to anon, authenticated;
 
@@ -508,6 +543,8 @@ grant select on public.household_members to authenticated;
 grant select, insert, update, delete on public.categories to authenticated;
 grant select, insert, update, delete on public.transactions to authenticated;
 grant select, insert, update, delete on public.budgets to authenticated;
+grant select, insert, update, delete on public.push_subscriptions to authenticated;
+revoke all on public.push_subscriptions from anon;
 
 revoke all on function public.is_household_member(uuid) from public;
 revoke all on function public.can_edit_household(uuid) from public;
@@ -528,7 +565,7 @@ grant execute on function public.remove_member(uuid, uuid) to authenticated;
 grant execute on function public.delete_category(uuid) to authenticated;
 
 -- ---------------------------------------------------------------------------
--- 11. Realtime (family members see each other's changes)
+-- 12. Realtime (family members see each other's changes)
 -- ---------------------------------------------------------------------------
 do $$
 begin

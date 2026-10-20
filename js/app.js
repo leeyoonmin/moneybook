@@ -8,6 +8,7 @@ import {
   weekRangeLabel, daysBetween
 } from './store.js';
 import { Cloud } from './cloud.js';
+import { VAPID_PUBLIC_KEY } from './config.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -40,7 +41,8 @@ const I = {
   sync: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-13.7-5.2L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 13.7 5.2L20 16"/><path d="M20 20v-4h-4"/></svg>',
   logout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3.5a1.5 1.5 0 0 1 1.5 1.5v13a1.5 1.5 0 0 1-1.5 1.5H15"/><path d="M10 8l-4 4 4 4M6 12h9"/></svg>',
   check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.2 4.2L19 7"/></svg>',
-  cloud: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18.5h9.7a4.1 4.1 0 0 0 .5-8.2 5.7 5.7 0 0 0-11-1.3A4.3 4.3 0 0 0 7 18.5z"/></svg>'
+  cloud: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18.5h9.7a4.1 4.1 0 0 0 .5-8.2 5.7 5.7 0 0 0-11-1.3A4.3 4.3 0 0 0 7 18.5z"/></svg>',
+  bell: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 9a6 6 0 0 0-12 0c0 6.5-2.5 6.8-2.5 8.5h17C20.5 15.8 18 15.5 18 9z"/><path d="M9.7 20.5a2.5 2.5 0 0 0 4.6 0"/></svg>'
 };
 
 const S = {
@@ -59,7 +61,14 @@ const S = {
   authError: '',
   authNotice: '',
   busy: false,
-  googleEnabled: null
+  googleEnabled: null,
+  push: {
+    supported: null,
+    permission: null,
+    subscribed: false,
+    busy: false,
+    error: ''
+  }
 };
 
 /* ---------- theme ---------- */
@@ -633,6 +642,68 @@ function householdSection() {
   `;
 }
 
+function notificationSection() {
+  const p = S.push;
+  const supported = p.supported === null ? isPushSupported() : p.supported;
+  const needsInstall = isIOSDevice() && !isStandalone();
+
+  if (S.mode !== 'cloud') {
+    return `
+      <div class="group">
+        <button class="row" data-act="login">
+          <span class="ic">${I.bell}</span>
+          <span class="push-label">기록 알림<span>매일 저녁 6시 · 10시</span></span>
+          <span class="val">로그인</span>
+          <span class="chev">${I.chev}</span>
+        </button>
+      </div>
+      <p class="push-note">Google 로그인 후 알림을 켤 수 있어요.</p>`;
+  }
+
+  if (needsInstall || !supported) {
+    return `
+      <div class="group">
+        <div class="row push-row">
+          <span class="ic">${I.bell}</span>
+          <span class="push-label">기록 알림<span>${needsInstall ? '홈 화면에 추가한 뒤 켤 수 있어요' : '이 브라우저에서는 알림을 지원하지 않아요'}</span></span>
+          <span class="val">${needsInstall ? '설치 필요' : '지원 안 됨'}</span>
+        </div>
+      </div>
+      ${needsInstall ? '<button class="btn ghost sm push-install" data-act="install">홈 화면에 추가</button>' : ''}`;
+  }
+
+  if (p.permission === 'denied') {
+    return `
+      <div class="group">
+        <div class="row push-row">
+          <span class="ic">${I.bell}</span>
+          <span class="push-label">기록 알림<span>브라우저에서 알림이 차단되어 있어요</span></span>
+          <span class="val">차단됨</span>
+        </div>
+      </div>
+      <p class="push-note">주소창 옆 사이트 설정에서 알림을 허용한 뒤 다시 확인해 주세요.</p>`;
+  }
+
+  const on = p.subscribed;
+  const note = p.busy
+    ? '알림을 설정하고 있어요…'
+    : p.error
+      ? esc(p.error)
+      : on
+        ? '켜져 있어요. 이미 기록한 날은 알림을 보내지 않아요.'
+        : '켜면 브라우저 알림 권한을 요청해요. 이 기기에서만 적용됩니다.';
+
+  return `
+    <div class="group">
+      <button class="row push-row" data-act="toggle-push" role="switch" aria-checked="${on}" ${p.busy ? 'disabled' : ''}>
+        <span class="ic">${I.bell}</span>
+        <span class="push-label">기록 알림<span>매일 저녁 6시 · 10시 · 한국 시간</span></span>
+        <span class="switch ${on ? 'on' : ''}" aria-hidden="true"><i></i></span>
+      </button>
+    </div>
+    <p class="push-note">${note}</p>`;
+}
+
 function settingsView() {
   const theme = DB.state.theme;
   const budget = DB.budgetFor(S.ym);
@@ -659,6 +730,9 @@ function settingsView() {
 
       ${accountSection()}
       ${householdSection()}
+
+      <div class="group-label">알림</div>
+      ${notificationSection()}
 
       <div class="group-label">예산과 화면</div>
       <div class="group">
@@ -705,7 +779,7 @@ function settingsView() {
           <span class="val">${isStandalone() ? '설치됨' : 'PWA'}</span>
         </button>
         <div class="row" style="color:var(--muted)">
-          <span class="ic">${I.cloud}</span><span>버전</span><span class="val">1.2.0</span>
+          <span class="ic">${I.cloud}</span><span>버전</span><span class="val">1.3.0</span>
         </div>
       </div>
 
@@ -875,6 +949,7 @@ function go(tab) {
   S.tab = tab;
   render();
   $('.page')?.classList.add('enter');
+  if (tab === 'settings') refreshPushStatus();
   window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
 }
 
@@ -1410,6 +1485,168 @@ async function installFlow() {
   openInstallGuide();
 }
 
+/* ---------- push reminders ---------- */
+
+function isPushSupported() {
+  return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+}
+
+function isIOSDevice() {
+  return /iphone|ipad|ipod/i.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i += 1) out[i] = raw.charCodeAt(i);
+  return out;
+}
+
+let pushRefreshing = false;
+
+async function refreshPushStatus() {
+  if (pushRefreshing) return;
+  pushRefreshing = true;
+  S.push.supported = isPushSupported();
+  S.push.permission = S.push.supported ? Notification.permission : 'unsupported';
+  try {
+    if (S.push.supported) {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      S.push.subscribed = Boolean(sub);
+    } else {
+      S.push.subscribed = false;
+    }
+  } catch {
+    S.push.subscribed = false;
+  } finally {
+    pushRefreshing = false;
+    if (S.tab === 'settings' && (S.mode === 'guest' || S.mode === 'cloud')) render();
+  }
+}
+
+function friendlyPushError(err) {
+  const msg = String(err?.message || '');
+  if (msg.includes('push_subscriptions') || msg.includes('relation') || msg.includes('does not exist')) {
+    return '알림 저장소가 아직 준비되지 않았어요. Supabase 설정을 확인해 주세요.';
+  }
+  if (err?.name === 'NotAllowedError') return '브라우저에서 알림 권한이 필요해요.';
+  if (err?.name === 'InvalidStateError') return '알림 구독을 갱신하지 못했어요. 잠시 후 다시 시도해 주세요.';
+  if (err?.name === 'AbortError') return '알림 구독이 중단됐어요. 다시 시도해 주세요.';
+  return '알림을 켜지 못했어요. 잠시 후 다시 시도해 주세요.';
+}
+
+async function enablePush() {
+  if (S.mode !== 'cloud' || !Cloud.user) {
+    toast('Google 로그인 후 알림을 켤 수 있어요');
+    startLogin();
+    return;
+  }
+  if (isIOSDevice() && !isStandalone()) {
+    openInstallGuide();
+    return;
+  }
+  if (!isPushSupported()) {
+    toast('이 브라우저에서는 알림을 지원하지 않아요');
+    return;
+  }
+  if (!VAPID_PUBLIC_KEY) {
+    toast('알림 설정이 아직 준비되지 않았어요');
+    return;
+  }
+  if (S.push.busy) return;
+
+  S.push.busy = true;
+  S.push.error = '';
+  if (S.tab === 'settings') render();
+
+  try {
+    const permission = Notification.permission === 'granted'
+      ? 'granted'
+      : await Notification.requestPermission();
+    S.push.permission = permission;
+    if (permission !== 'granted') {
+      S.push.error = permission === 'denied'
+        ? '브라우저에서 알림이 차단되어 있어요.'
+        : '알림 권한을 허용해야 켤 수 있어요.';
+      return;
+    }
+
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+      });
+    }
+    const json = sub.toJSON();
+    if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
+      throw new Error('알림 구독 정보가 올바르지 않아요');
+    }
+
+    try {
+      await Cloud.savePushSubscription({
+        endpoint: json.endpoint,
+        p256dh: json.keys.p256dh,
+        auth: json.keys.auth,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Seoul'
+      });
+    } catch (e) {
+      await sub.unsubscribe().catch(() => {});
+      throw e;
+    }
+
+    S.push.subscribed = true;
+    toast('매일 저녁 6시와 10시에 알려드릴게요');
+  } catch (e) {
+    S.push.error = friendlyPushError(e);
+  } finally {
+    S.push.busy = false;
+    if (S.tab === 'settings') render();
+  }
+}
+
+async function disablePush({ silent = false } = {}) {
+  if (S.push.busy) return;
+  if (!isPushSupported()) {
+    S.push.subscribed = false;
+    return;
+  }
+  S.push.busy = true;
+  S.push.error = '';
+  if (!silent && S.tab === 'settings') render();
+
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      try {
+        await Cloud.removePushSubscription(sub.endpoint);
+      } catch (e) {
+        if (!silent) S.push.error = friendlyPushError(e);
+      }
+      await sub.unsubscribe().catch(() => {});
+    }
+    S.push.subscribed = false;
+    if (!silent) toast('알림을 껐어요');
+  } catch (e) {
+    if (!silent) S.push.error = friendlyPushError(e);
+  } finally {
+    S.push.busy = false;
+    if (!silent && S.tab === 'settings') render();
+  }
+}
+
+function togglePush() {
+  if (S.push.busy) return;
+  if (S.push.subscribed) disablePush();
+  else enablePush();
+}
+
 /* ---------- month picker ---------- */
 
 function openMonthPicker() {
@@ -1685,6 +1922,7 @@ async function signOutFlow() {
     danger: false
   });
   if (!ok) return;
+  await disablePush({ silent: true });
   await Cloud.signOut();
   DB.useStorage('moneybook.v1');
   S.mode = 'auth';
@@ -1872,6 +2110,8 @@ document.addEventListener('click', (e) => {
 
   switch (act) {
     case 'tab': go(el.dataset.tab); break;
+    case 'toggle-push': togglePush(); break;
+    case 'refresh-push': refreshPushStatus(); break;
     case 'home-mode': {
       const mode = el.dataset.mode;
       if (mode !== S.homeMode) {
@@ -2005,13 +2245,15 @@ function handleQuery() {
     S.tab = tab;
     render();
   }
-  if (params.get('action') === 'add') {
+  if (params.get('action') === 'add' && (S.mode === 'guest' || S.mode === 'cloud')) {
     setTimeout(() => openTxSheet(), 320);
   }
 }
 
 async function boot() {
   applyTheme();
+  S.push.supported = isPushSupported();
+  S.push.permission = S.push.supported ? Notification.permission : 'unsupported';
   parseJoinCode();
   S.mode = 'boot';
   render();
@@ -2041,6 +2283,7 @@ async function boot() {
   }
 
   handleQuery();
+  refreshPushStatus();
 }
 
 window.addEventListener('mb:auth', (e) => {
@@ -2069,6 +2312,14 @@ if (new URLSearchParams(location.search).has('debug')
 }
 
 if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data?.type !== 'moneybook:open-add') return;
+    if (S.mode !== 'guest' && S.mode !== 'cloud') return;
+    S.tab = 'home';
+    render();
+    setTimeout(() => { if (!S.draft) openTxSheet(); }, 80);
+  });
+
   const hadController = Boolean(navigator.serviceWorker.controller);
   let refreshing = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {

@@ -913,6 +913,59 @@ svg { display: block; }
 .row .ic { width: 20px; height: 20px; color: var(--muted); }
 .row .ic svg { width: 100%; height: 100%; }
 
+.push-row { align-items: center; }
+.push-row[disabled] { opacity: 0.6; }
+
+.push-label {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.push-label > span {
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.switch {
+  position: relative;
+  flex: 0 0 auto;
+  width: 40px;
+  height: 24px;
+  margin-left: auto;
+  border-radius: 999px;
+  background: var(--track);
+  transition: background 0.18s;
+}
+
+.switch i {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
+  transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.switch.on { background: var(--accent); }
+.switch.on i { transform: translateX(16px); }
+
+.push-note {
+  margin: 8px 2px 0;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.push-install { margin: 8px 0 0 2px; }
+
 .group-label {
   display: flex;
   align-items: baseline;

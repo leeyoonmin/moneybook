@@ -1,0 +1,54 @@
+name: moneybook-reminders
+
+on:
+  schedule:
+    # 18:00 and 22:00 KST (UTC+9, no DST)
+    - cron: '0 9 * * *'
+    - cron: '0 13 * * *'
+  workflow_dispatch:
+    inputs:
+      slot:
+        description: 'evening / night / auto'
+        required: false
+        default: 'auto'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: moneybook-reminders
+  cancel-in-progress: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install web-push
+        run: npm install --no-save --no-audit --no-fund web-push@3.6.7
+
+      - name: Send warm reminders
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
+          APP_URL: ${{ vars.MONEYBOOK_APP_URL }}
+          SLOT: ${{ inputs.slot }}
+        run: |
+          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::error::SUPABASE_SERVICE_ROLE_KEY secret is not set"
+            exit 1
+          fi
+          if [ -z "$VAPID_PRIVATE_KEY" ] || [ -z "$VAPID_PUBLIC_KEY" ]; then
+            echo "::error::VAPID secrets are not set"
+            exit 1
+          fi
+          node scripts/send-reminders.mjs
