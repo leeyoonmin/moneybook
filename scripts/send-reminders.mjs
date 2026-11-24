@@ -49,9 +49,16 @@ const messages = {
 };
 
 const kstHour = (new Date().getUTCHours() + 9) % 24;
-const slot = ['evening', 'night'].includes(SLOT_INPUT)
+const explicitSlot = ['evening', 'night'].includes(SLOT_INPUT);
+const slot = explicitSlot
   ? SLOT_INPUT
   : (kstHour >= 20 || kstHour < 6 ? 'night' : 'evening');
+
+// GitHub's scheduled runs can be delayed by hours; never ping outside 18/22 KST.
+if (!explicitSlot && ![18, 22].includes(kstHour)) {
+  console.log(JSON.stringify({ skipped: 'outside-window', kstHour }));
+  process.exit(0);
+}
 
 const headers = {
   apikey: SERVICE_KEY,
