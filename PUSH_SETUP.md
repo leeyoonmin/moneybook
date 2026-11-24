@@ -72,6 +72,7 @@ gh workflow run reminders.yml -f slot=evening
 
 GitHub Actions의 스케줄은 몇 분 늦게 실행될 수 있습니다. 조용한 알림이라면 충분하지만,
 초 단위로 정확해야 한다면 별도 스케줄러로 `scripts/send-reminders.mjs`를 실행하면 됩니다.
+예약 실행이 18시/22시(KST) 시간대를 벗어나면 알림을 보내지 않도록 안전장치를 두었습니다.
 
 ## 알림 문구
 
